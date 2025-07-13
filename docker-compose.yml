@@ -1,0 +1,59 @@
+version: "3.8"
+
+services:
+  backend:
+    container_name: backend-api
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    # bind-mount your code & preserve container's node_modules
+    volumes:
+      - ./:/usr/src/node-app
+      - /usr/src/node-app/node_modules
+    environment:
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_USER: root
+      DB_PASSWORD: rootpassword
+      DB_NAME: testdb
+      # enable polling if needed
+      CHOKIDAR_USEPOLLING: "true"
+    command: >
+      sh -c "
+        wait-for-it.sh db:3306 --strict --timeout=30 -- \
+        npm run migrate &&
+        npm run dev
+      "
+    depends_on:
+      - db
+
+  db:
+    container_name: mysql-db
+    image: mysql:8.0
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: testdb
+    ports:
+      - "3307:3306"
+    volumes:
+      - db_data:/var/lib/mysql
+
+  phpmyadmin:
+    container_name: phpmyadmin
+    image: phpmyadmin/phpmyadmin
+    restart: always
+    ports:
+      - "8080:80"
+    environment:
+      PMA_HOST: db
+      PMA_PORT: 3306
+      PMA_USER: root
+      PMA_PASSWORD: rootpassword
+    depends_on:
+      - db
+
+volumes:
+  db_data:
