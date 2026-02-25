@@ -4,60 +4,37 @@ const Joi = require('@hapi/joi');
 
 dotenv.config({ path: path.join(__dirname, '../../.env') });
 
-const envVarsSchema = Joi.object()
-	.keys({
-		NODE_ENV: Joi.string()
-			.valid('production', 'development', 'test')
-			.required(),
-		PORT: Joi.number().default(3000),
+const envVarsSchema = Joi.object({
+	NODE_ENV: Joi.string().valid('production', 'development', 'test').required(),
+	PORT: Joi.number().default(3000),
 
-		JWT_SECRET: Joi.string().required().description('JWT secret key'),
-		JWT_ACCESS_EXPIRATION_MINUTES: Joi.number()
-			.default(30)
-			.description('minutes after which access tokens expire'),
-		JWT_REFRESH_EXPIRATION_DAYS: Joi.number()
-			.default(30)
-			.description('days after which refresh tokens expire'),
+	// JWT
+	JWT_SECRET: Joi.string().required(),
+	JWT_ACCESS_EXPIRATION_MINUTES: Joi.number().default(30),
+	JWT_REFRESH_EXPIRATION_DAYS: Joi.number().default(30),
+	COOKIE_EXPIRATION_HOURS: Joi.number().default(24),
 
-		COOKIE_EXPIRATION_HOURS: Joi.number()
-			.default(24)
-			.description('hours after which httpOnly cookie expire'),
+	// Postgres
+	DB_USERNAME: Joi.string().required(),
+	DB_PASSWORD: Joi.string().required(),
+	DB_HOST: Joi.string().required(),
+	DB_PORT: Joi.number().default(5432),
+	DB_DATABASE_NAME: Joi.string().required(),
+	DB_DIALECT: Joi.string().valid('postgres').default('postgres'),
 
-		SQL_USERNAME: Joi.string().description('sqldb username'),
-		SQL_HOST: Joi.string().description('sqldb host'),
-		SQL_DATABASE_NAME: Joi.string().description('sqldb database name'),
-		SQL_PASSWORD: Joi.string().description('sqldb password'),
-		SQL_DIALECT: Joi.string()
-			.default('postgres')
-			.description('type of sqldb'),
-		SQL_MAX_POOL: Joi.number()
-			.default(10)
-			.min(5)
-			.description('sqldb max pool connection'),
-		SQL_MIN_POOL: Joi.number()
-			.default(0)
-			.min(0)
-			.description('sqldb min pool connection'),
-		SQL_IDLE: Joi.number()
-			.default(10000)
-			.description('sqldb max pool idle time in miliseconds'),
-		SQL_PORT: Joi.number().description('sqldb port'),
+	DB_MAX_POOL: Joi.number().default(10),
+	DB_MIN_POOL: Joi.number().default(0),
+	DB_IDLE: Joi.number().default(10000),
 
-		SMTP_HOST: Joi.string().description('server that will send the emails'),
-		SMTP_PORT: Joi.number().description(
-			'port to connect to the email server'
-		),
-		SMTP_USERNAME: Joi.string().description('username for email server'),
-		SMTP_PASSWORD: Joi.string().description('password for email server'),
-		EMAIL_FROM: Joi.string().description(
-			'the from field in the emails sent by the app'
-		),
-	})
-	.unknown();
+	// Email (optional)
+	SMTP_HOST: Joi.string().allow(''),
+	SMTP_PORT: Joi.number().allow(null),
+	SMTP_USERNAME: Joi.string().allow(''),
+	SMTP_PASSWORD: Joi.string().allow(''),
+	EMAIL_FROM: Joi.string().allow(''),
+}).unknown();
 
-const { value: envVars, error } = envVarsSchema
-	.prefs({ errors: { label: 'key' } })
-	.validate(process.env);
+const { value: envVars, error } = envVarsSchema.validate(process.env);
 
 if (error) {
 	throw new Error(`Config validation error: ${error.message}`);
@@ -66,85 +43,36 @@ if (error) {
 module.exports = {
 	env: envVars.NODE_ENV,
 	port: envVars.PORT,
-	pagination: {
-		limit: 10,
-		page: 1,
-	},
+
 	jwt: {
 		secret: envVars.JWT_SECRET,
 		accessExpirationMinutes: envVars.JWT_ACCESS_EXPIRATION_MINUTES,
 		refreshExpirationDays: envVars.JWT_REFRESH_EXPIRATION_DAYS,
-		resetPasswordExpirationMinutes: 10,
 	},
+
 	cookie: {
 		cookieExpirationHours: envVars.COOKIE_EXPIRATION_HOURS,
 	},
+
 	sqlDB: {
-		user: envVars.SQL_USERNAME,
-		host: envVars.SQL_HOST,
-		database: envVars.SQL_DATABASE_NAME,
-		password: envVars.SQL_PASSWORD,
-		dialect: envVars.SQL_DIALECT,
-		port: envVars.SQL_PORT,
+		host: envVars.DB_HOST,
+		port: envVars.DB_PORT,
+		user: envVars.DB_USERNAME,
+		password: envVars.DB_PASSWORD,
+		database: envVars.DB_DATABASE_NAME,
+		dialect: 'postgres',
 		pool: {
-			max: envVars.SQL_MAX_POOL,
-			min: envVars.SQL_MIN_POOL,
-			idle: envVars.SQL_IDLE,
+			max: envVars.DB_MAX_POOL,
+			min: envVars.DB_MIN_POOL,
+			idle: envVars.DB_IDLE,
 		},
-		// dialectOptions: {
-		// 	ssl: {
-		// 		rejectUnauthorized: false
-		// 	}
-		// },
-		define: {
-			/**
-			 * All tables won't have "createdAt" and "updatedAt" Auto fields.
-			 * References: https://sequelize.org/master/manual/model-basics.html#timestamps
-			 */
-			timestamps: false,
-			// Table names won't be pluralized.
-			freezeTableName: true,
-			// Column names will be underscored.
-			underscored: true,
-		},
-	},
-	mysqlDB: {
-		user: "root",
-		host: "db",
-		database: "testdb",
-		password: "rootpassword",
-		dialect: "mysql",
-		port: 3306,
-		pool: {
-			max: envVars.SQL_MAX_POOL,
-			min: envVars.SQL_MIN_POOL,
-			idle: envVars.SQL_IDLE,
-		},
-		// dialectOptions: {
-		// 	ssl: {
-		// 		rejectUnauthorized: false
-		// 	}
-		// },
-		// define: {
-		// 	/**
-		// 	 * All tables won't have "createdAt" and "updatedAt" Auto fields.
-		// 	 * References: https://sequelize.org/master/manual/model-basics.html#timestamps
-		// 	 */
-		// 	timestamps: false,
-		// 	// Table names won't be pluralized.
-		// 	freezeTableName: true,
-		// 	// Column names will be underscored.
-		// 	underscored: true,
-		// },
 	},
 	email: {
 		smtp: {
 			host: envVars.SMTP_HOST,
 			port: envVars.SMTP_PORT,
-			auth: {
-				user: envVars.SMTP_USERNAME,
-				pass: envVars.SMTP_PASSWORD,
-			},
+			username: envVars.SMTP_USERNAME,
+			password: envVars.SMTP_PASSWORD,
 		},
 		from: envVars.EMAIL_FROM,
 	},

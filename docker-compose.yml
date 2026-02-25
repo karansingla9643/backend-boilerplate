@@ -8,21 +8,14 @@ services:
       dockerfile: Dockerfile
     ports:
       - "3000:3000"
-    # bind-mount your code & preserve container's node_modules
     volumes:
       - ./:/usr/src/node-app
       - /usr/src/node-app/node_modules
-    environment:
-      DB_HOST: db
-      DB_PORT: 3306
-      DB_USER: root
-      DB_PASSWORD: rootpassword
-      DB_NAME: testdb
-      # enable polling if needed
-      CHOKIDAR_USEPOLLING: "true"
+    env_file:
+      - .env
     command: >
       sh -c "
-        wait-for-it.sh db:3306 --strict --timeout=30 -- \
+        wait-for-it.sh db:5432 --strict --timeout=30 -- \
         npm run migrate &&
         npm run dev
       "
@@ -30,30 +23,29 @@ services:
       - db
 
   db:
-    container_name: mysql-db
-    image: mysql:8.0
+    container_name: postgres-db
+    image: postgres:15
     restart: always
     environment:
-      MYSQL_ROOT_PASSWORD: rootpassword
-      MYSQL_DATABASE: testdb
+      POSTGRES_USER: ${DB_USERNAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_DATABASE_NAME}
     ports:
-      - "3307:3306"
+      - "5433:5432"
     volumes:
-      - db_data:/var/lib/mysql
+      - pg_data:/var/lib/postgresql/data
 
-  phpmyadmin:
-    container_name: phpmyadmin
-    image: phpmyadmin/phpmyadmin
+  pgadmin:
+    container_name: pgadmin
+    image: dpage/pgadmin4
     restart: always
     ports:
       - "8080:80"
     environment:
-      PMA_HOST: db
-      PMA_PORT: 3306
-      PMA_USER: root
-      PMA_PASSWORD: rootpassword
+      PGADMIN_DEFAULT_EMAIL: admin@example.com
+      PGADMIN_DEFAULT_PASSWORD: adminpassword
     depends_on:
       - db
 
 volumes:
-  db_data:
+  pg_data:

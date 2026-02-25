@@ -1,90 +1,153 @@
 const { Op } = require('sequelize');
 
 /**
- * Recursively builds Sequelize-compatible filter conditions.
+ * Operator mapping (FastAPI parity)
  */
-function parseFilter(filter) {
-    if (!filter || typeof filter !== 'object') return {};
+const OP_MAP = {
+    eq: Op.eq,
+    ne: Op.ne,
+    gt: Op.gt,
+    gte: Op.gte,
+    lt: Op.lt,
+    lte: Op.lte,
+    in: Op.in,
+    nin: Op.notIn,
+    like: Op.like,
+    ilike: Op.iLike,
+    notlike: Op.notLike,
+    contains: Op.substring,
+    isnull: 'isnull',
+};
+
+/**
+ * Parses operator objects and scalar values
+ */
+function parseValue(value) {
+    if (Array.isArray(value)) {
+        return { [Op.in]: value };
+    }
+
+    if (value && typeof value === 'object') {
+        const obj = {};
+        for (const [op, val] of Object.entries(value)) {
+            const normalized = op.replace(/^\$/, '').toLowerCase();
+            const mapped = OP_MAP[normalized];
+
+            if (!mapped) continue;
+
+            if (mapped === 'isnull') {
+                obj[Op.is] = val ? null : { [Op.not]: null };
+            } else {
+                obj[mapped] = val;
+            }
+        }
+        return obj;
+    }
+
+    return value;
+}
+
+/**
+ * Ensures nested Sequelize includes for dot-path filters
+ */
+function ensureInclude(includeMap, parts) {
+    let currentLevel = includeMap;
+    let path = '';
+
+    for (const part of parts) {
+        path = path ? `${path}.${part}` : part;
+
+        if (!currentLevel.has(path)) {
+            currentLevel.set(path, {
+                association: part,
+                required: false,
+                include: [],
+            });
+        }
+
+        const includeEntry = currentLevel.get(path);
+
+        // Prepare next level map from existing include array
+        const nextLevel = new Map();
+        for (const inc of includeEntry.include) {
+            nextLevel.set(inc.association, inc);
+        }
+
+        currentLevel = nextLevel;
+        includeEntry.include = Array.from(currentLevel.values());
+    }
+}
+
+/**
+ * Builds Sequelize WHERE + INCLUDE from filter object
+ */
+function buildWhereAndInclude(filter = {}) {
+    const includeMap = new Map();
 
     const build = (obj) => {
         const where = {};
 
         for (const [key, value] of Object.entries(obj)) {
+            // Logical operators
             if (key === '$or' || key === '$and') {
                 where[Op[key.slice(1)]] = value.map(build);
                 continue;
             }
 
-            if (typeof value === 'object' && !Array.isArray(value)) {
-                const inner = {};
-                for (const [op, val] of Object.entries(value)) {
-                    const operator = mapOperator(op);
-                    if (operator) {
-                        inner[operator] = val;
-                    }
-                }
-                where[key] = inner;
-            } else {
-                where[key] = value;
+            // Dot-path filter (relation.field)
+            if (key.includes('.')) {
+                const parts = key.split('.');
+                const field = parts.pop();
+                const associationPath = parts.join('.');
+
+                ensureInclude(includeMap, parts);
+
+                where[`$${associationPath}.${field}$`] = parseValue(value);
+                continue;
             }
+
+            // Normal field
+            where[key] = parseValue(value);
         }
 
         return where;
     };
 
-    return build(filter);
+    return {
+        where: build(filter),
+        include: Array.from(includeMap.values()),
+    };
 }
 
 /**
- * Maps string operators to Sequelize.Op symbols.
- */
-function mapOperator(op) {
-    const normalized = op.replace(/^\$/, '').toLowerCase();
-    switch (normalized) {
-        case 'eq': return Op.eq;
-        case 'ne': return Op.ne;
-        case 'gt': return Op.gt;
-        case 'gte': return Op.gte;
-        case 'lt': return Op.lt;
-        case 'lte': return Op.lte;
-        case 'in': return Op.in;
-        case 'nin': return Op.notIn;
-        case 'like': return Op.like;
-        case 'ilike': return Op.iLike;
-        case 'notlike': return Op.notLike;
-        case 'contains': return Op.substring;
-        default: return null;
-    }
-}
-
-/**
- * Converts dot-path includes (e.g., "profile.address.city") into Sequelize include tree.
+ * Builds include tree from explicit include paths
+ * (eager loading support)
  */
 function buildIncludesFromPaths(paths = []) {
-    const include = [];
+    const root = [];
 
     for (const path of paths) {
         const parts = path.split('.');
-        let current = include;
+        let current = root;
 
         for (const part of parts) {
             let existing = current.find(i => i.association === part);
             if (!existing) {
-                existing = { association: part, include: [] };
+                existing = { association: part, required: false, include: [] };
                 current.push(existing);
             }
             current = existing.include;
         }
     }
 
-    return include;
+    return root;
 }
 
 /**
- * Pagination plugin for Sequelize models.
+ * Pagination plugin for Sequelize models
  */
 module.exports = (Model) => {
-    Model.paginate = async function (
+    Model.paginate = async function paginate(
         filter = {},
         options = {}
     ) {
@@ -92,42 +155,44 @@ module.exports = (Model) => {
         const limit = Math.max(1, parseInt(options.limit, 10) || 10);
         const offset = (page - 1) * limit;
 
-        // Handle sorting
+        // Sorting
         const order = options.sortBy
-            ? options.sortBy.split(',').map((s) => {
+            ? options.sortBy.split(',').map(s => {
                 const [field, dir] = s.split(':');
                 return [field.trim(), (dir || 'asc').toUpperCase()];
             })
-            : [['createdAt', 'DESC']];
+            : [['createdAt', 'DESC'], ['id', 'DESC']];
 
         if (!order.find(([field]) => field === 'id')) {
             order.push(['id', 'DESC']);
         }
 
-        // Convert filter to Sequelize where clause
-        const where = parseFilter(filter);
+        // Build filters (auto joins)
+        const { where, include: filterIncludes } = buildWhereAndInclude(filter);
 
-        // Handle nested includes
-        const includePaths = options.include || [];
-        const include = buildIncludesFromPaths(includePaths);
+        // Explicit eager-load includes
+        const eagerIncludes = buildIncludesFromPaths(options.include || []);
 
-        // Run paginated query
-        const { count: totalResults, rows: results } = await this.findAndCountAll({
-            where,
-            attributes: options.select || undefined,
-            include,
-            order,
-            limit,
-            offset,
-            distinct: true, // Ensure correct count when joins are present
-        });
+        // Merge includes
+        const include = [...filterIncludes, ...eagerIncludes];
+
+        const { rows: results, count: totalResults } =
+            await this.findAndCountAll({
+                where,
+                include,
+                order,
+                limit,
+                offset,
+                distinct: true, // critical for joins
+                attributes: options.select || undefined,
+            });
 
         return {
             results,
             page,
             limit,
-            totalPages: Math.ceil(totalResults / limit),
             totalResults,
+            totalPages: Math.max(Math.ceil(totalResults / limit), 1),
         };
     };
 };

@@ -1,17 +1,33 @@
-const { sqlDB, mysqlDB } = require('../../config/config');
-const { user, ...rest } = mysqlDB;
-const db = {
+require('dotenv').config();
+
+module.exports = {
     development: {
-        username: "root",
-        host: "127.0.0.1",
-        // host: "db",
-        database: "testdb",
-        password: "rootpassword",
-        dialect: "mysql",
-        port: 3307,
+        username: process.env.DB_USERNAME,
+        password: process.env.DB_PASSWORD,
+        database: process.env.DB_DATABASE_NAME,
+        host: process.env.DB_HOST,
+        port: process.env.DB_PORT,
+        dialect: 'postgres',
+        logging: false,
     },
-    test: { username: user, ...rest },
-    production: { username: user, ...rest },
-}
-// now export it under the three standard env names
-module.exports = db;
+
+    test: {
+        username: process.env.DB_USERNAME,
+        password: process.env.DB_PASSWORD,
+        database: process.env.DB_DATABASE_NAME,
+        host: process.env.DB_HOST,
+        port: process.env.DB_PORT,
+        dialect: 'postgres',
+        logging: false,
+    },
+
+    production: {
+        username: process.env.DB_USERNAME,
+        password: process.env.DB_PASSWORD,
+        database: process.env.DB_DATABASE_NAME,
+        host: process.env.DB_HOST,
+        port: process.env.DB_PORT,
+        dialect: 'postgres',
+        logging: false,
+    },
+};

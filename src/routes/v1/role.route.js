@@ -50,9 +50,12 @@ module.exports = router;
  *                  description: must be unique
  *                description:
  *                   type: string
+ *                priority:
+ *                   type: number
  *              example:
  *                name: admin
  *                description: admin
+ *                priority: 1
  *      responses:
  *        "201":
  *          description: Created
@@ -75,20 +78,10 @@ module.exports = router;
  *        - bearerAuth: []
  *      parameters:
  *        - in: query
- *          name: name
+ *          name: search
+ *          description: Search by name or description
  *          schema:
  *            type: string
- *          description: role name
- *        - in: query
- *          name: description
- *          schema:
- *            type: string
- *          description: role descrition
- *        - in: query
- *          name: sortBy
- *          schema:
- *            type: string
- *          description: sort by query in the form of field:desc/asc (ex. name:asc)
  *        - in: query
  *          name: limit
  *          schema:

@@ -17,25 +17,19 @@ async function getRoleByName(name) {
 	return role;
 }
 
-async function getRoles(options, filter) {
-	const roles = await db.role.paginate(filter, options);
-	return roles;
+async function getRoles(filter, options) {
+	return db.role.paginate(filter, options);
 }
 
 async function createRole(reqBody) {
-	const { name, description = '' } = reqBody;
+	const { name } = reqBody;
 	const existedRole = await getRoleByName(name);
 
 	if (existedRole) {
 		throw new ApiError(httpStatus.CONFLICT, 'This role already exits');
 	}
 
-	const createdRole = await db.role
-		.create({
-			name,
-			description,
-		})
-		.then((resultEntity) => resultEntity.get({ plain: true }));
+	const createdRole = await db.role.create(reqBody).then((resultEntity) => resultEntity.get({ plain: true }));
 
 	return createdRole;
 }
@@ -56,9 +50,17 @@ async function updateRole(reqBody) {
 	return updatedRole;
 }
 
+async function deleteRoleById(roleId) {
+	const role = await db.role.destroy({
+		where: { id: roleId },
+	});
+	return role;
+}
+
 module.exports = {
 	getRoleById,
 	getRoles,
 	createRole,
 	updateRole,
+	deleteRoleById,
 };

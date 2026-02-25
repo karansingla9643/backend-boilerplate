@@ -4,6 +4,7 @@ const createRole = {
 	body: Joi.object().keys({
 		name: Joi.string().required(),
 		description: Joi.string(),
+		priority: Joi.number().required(),
 	}),
 };
 
@@ -11,8 +12,7 @@ const getRoles = {
 	query: Joi.object().keys({
 		limit: Joi.number().min(1),
 		page: Joi.number().min(1),
-		name: Joi.string(),
-		description: Joi.string(),
+		search: Joi.string(),
 	}),
 };
 
@@ -30,6 +30,7 @@ const updateRole = {
 		.keys({
 			name: Joi.string(),
 			description: Joi.string(),
+			priority: Joi.number(),
 		})
 		.min(1),
 };

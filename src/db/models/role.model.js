@@ -17,6 +17,11 @@ module.exports = (sequelize, DataTypes) => {
 				type: DataTypes.STRING,
 				allowNull: true,
 			},
+			priority: {
+				type: DataTypes.INTEGER,
+				allowNull: false,
+				defaultValue: 1,
+			},
 			type: {
 				type: DataTypes.ENUM('default', 'project'),
 				allowNull: false,

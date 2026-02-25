@@ -1,41 +1,36 @@
 /* eslint-disable global-require */
 /* eslint-disable import/no-dynamic-require */
+
 const fs = require('fs');
 const path = require('path');
 const Sequelize = require('sequelize');
 
-const config = require(`${__dirname}/../../config/config`);
+const config = require('../../config/config');
 
-const basename = path.basename(module.filename);
-
+const basename = path.basename(__filename);
 const db = {};
 
-// const sequelize = new Sequelize(
-// 	config.sqlDB.database,
-// 	config.sqlDB.user,
-// 	config.sqlDB.password,
-// 	{
-// 		...config.sqlDB,
-// 		logging: false,
-// 	}
-// );
-
+// ✅ Use sqlDB (Postgres), NOT mysqlDB
 const sequelize = new Sequelize(
-	config.mysqlDB.database,
-	config.mysqlDB.user,
-	config.mysqlDB.password,
+	config.sqlDB.database,
+	config.sqlDB.user,
+	config.sqlDB.password,
 	{
-		...config.mysqlDB,
+		host: config.sqlDB.host,
+		port: config.sqlDB.port,
+		dialect: 'postgres',
 		logging: false,
+		pool: config.sqlDB.pool,
 	}
 );
 
+// load all *.model.js files
 fs.readdirSync(__dirname)
 	.filter(
 		(file) =>
 			file.indexOf('.') !== 0 &&
 			file !== basename &&
-			file.slice(-9) === '.model.js'
+			file.endsWith('.model.js')
 	)
 	.forEach((file) => {
 		const model = require(path.join(__dirname, file))(
@@ -45,6 +40,7 @@ fs.readdirSync(__dirname)
 		db[model.name] = model;
 	});
 
+// run associations
 Object.keys(db).forEach((modelName) => {
 	if (db[modelName].associate) {
 		db[modelName].associate(db);
